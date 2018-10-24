@@ -1,0 +1,233 @@
+#run EREFinder for each chromosome with window size 1000, slide size 500, mask Ns, with alpha receptor
+#save outputs in shared folder
+#add funtions "peaksnew" and "pairPeak" to R environment
+
+#make one long dataframe of outputs to determine 3 sd cutoff
+mylist<-list.files("~EREout/")
+chr <- read.csv(paste0("~EREout/",mylist[1]),skip=1)
+chr <-subset(chr,chr$N>=800 & chr$mean_Kd_inverse!=-1)
+for(i in 2:length(mylist))
+	{
+	 x <- read.csv(paste0("~EREout/",mylist[i]),skip = 1)
+	 x <-subset(x,x$N>=800 & x$mean_Kd_inverse!=-1)
+	 chr<-rbind(chr,x)
+	}
+sd3<-mean(chr$mean_Kd_inverse)+3*sd(chr$mean_Kd_inverse)
+rm(chr)
+ 
+#read in gff file, trim to relevent information, extract gene symbol for matching
+gene <- read.delim("~gff.gff", header=F, comment.char="#")
+gene<-gene[c(grep("NC_",gene[,1])),]
+gene<-subset(gene,gene[,3]=="gene")
+gene<-subset(gene,gene[,1]!="NC_012920.1")
+Chr<-droplevels(gene[,1])
+gene<-data.frame(Chr,gene[,3],gene[,4],gene[,5],gene[,7],gene[,9])
+gene<-data.frame(gene[,1],gene[,3:6])
+colnames(gene)<-c("Chromosome","Start","Stop","GeneDirection","Info")
+levels(gene[,1])<-c(1:length(levels(gene[,1])))
+gene$Chromosome <- sapply(gene$Chromosome, function(y) { if (y == "23") "X" else y })
+gene$Chromosome <- sapply(gene$Chromosome, function(y) { if (y == "24") "Y" else y })
+gene$Chromosome<-as.factor(gene$Chromosome)
+name<-vector(mode="character")
+for(i in 1:length(gene$Info))
+ {
+     rowi<-gene$Info[i]
+     namei<-substr(rowi,regexpr("gene=",rowi)[1]+5,regexpr(";gene_",rowi)[1]-1)
+     name<-append(name,namei)
+ }
+hs_gene<-data.frame("Homo_sapiens",name,gene)
+colnames(hs_gene)<-c("Species","Name","Chromosome","Start","Stop","GeneDirection","Info")
+rm(gene) 
+
+#read in list of estrogen responsive genes and match to gff file
+estroresponse <- read.csv("/home/joneslab/sf_massiveshare/estroresponse.csv")
+estroresponse$estroresponse<-factor(estroresponse$estroresponse)
+ERGene<-hs_gene[which(hs_gene$Name %in% estroresponse$estroresponse),]
+
+#read in each EREFinder output for each chromosome, subset ER gene list by chromosome, run peak and pair functions, then draw equal number of random genes 1000 times and count peaks and pairs
+chrx<-subset(hs_gene,hs_gene$Chromosome=="X")
+ERGenex<-subset(ERGene,ERGene$Chromosome=="X")
+ERFindx <- read.csv(paste0("/home/joneslab/sf_massiveshare/EREout/chrx.csv"), skip = 1)
+ERFindx<-subset(ERFindx,ERFindx$mean_Kd_inverse!=-1 & ERFindx$N>=800)
+ERFindx$Chromosome<-factor("X")
+peak<-peaksnew(ERFindx,sd3,500,1000)
+peak$Chromosome<-factor("X")
+pair<-pairPeak(peak,ERGenex,25000,-10000)
+numpeakrand<-c()
+randprox<-c()
+for(k in 1:1000)
+ {
+  print(k)
+  randk<-chrx[sample(nrow(chrx),length(ERGenex$Chromosome)),]
+  matchrandk<-pairPeak(peak,randk,25000,-10000)
+  matchrandk_up<-subset(matchrandk,matchrandk$Proxy!="Down")
+  proxk<-length(levels(droplevels(matchrandk_up$Gene)))
+  randprox<-c(randprox,proxk)
+  numpeakk<-length(matchrandk_up$Gene)
+  numpeakrand<-c(numpeakrand,numpeakk)
+ }
+randframe<-data.frame(numpeakrand,randprox,"X")
+colnames(randframe)<-c("Peak_Num","Gene_Num","Chromosome")
+for(i in 1:22)
+ {
+  print(i)
+  chri<-subset(hs_gene,hs_gene$Chromosome==i)
+  ERGenei<-subset(ERGene,ERGene$Chromosome==i)
+  ERFindi <- read.csv(paste0("/home/joneslab/sf_massiveshare/EREout/chr",i,".csv"), skip = 1)
+  ERFindi<-subset(ERFindi,ERFindi$mean_Kd_inverse!=-1 & ERFindi$N>=800)
+  ERFindi$Chromosome<-factor(i)
+  peaki<-peaksnew(ERFindi,sd3,500,1000)
+  peaki$Chromosome<-factor(i)
+  peak<-rbind(peak,peaki)
+  pairi<-pairPeak(peaki,ERGenei,25000,-10000)
+  pair<-rbind(pair,pairi)
+  numpeakrandi<-c()
+  randproxi<-c()
+  for(k in 1:1000)
+ 	{
+  	 print(k)
+	 randk<-chri[sample(nrow(chri),length(ERGenei$Chromosome)),]
+	 matchrandk<-pairPeak(peaki,randk,25000,-10000)
+	 matchrandk_up<-subset(matchrandk,matchrandk$Proxy!="Down")
+	 proxk<-length(levels(droplevels(matchrandk_up$Gene)))
+	 randproxi<-c(randproxi,proxk)
+	 numpeakk<-length(matchrandk_up$Gene)
+	 numpeakrandi<-c(numpeakrandi,numpeakk)
+	}
+  randframei<-data.frame(numpeakrandi,randproxi)
+  randframei$Chromosome<-factor(i)
+  colnames(randframei)<-c("Peak_Num","Gene_Num","Chromosome")
+  randframe<-rbind(randframe,randframei)
+ }
+chry<-subset(hs_gene,hs_gene$Chromosome=="Y")
+ERGeney<-subset(ERGene,ERGene$Chromosome=="Y")
+ERFindy <- read.csv(paste0("/home/joneslab/sf_massiveshare/EREout/chry.csv"), skip = 1)
+ERFindy<-subset(ERFindy,ERFindy$mean_Kd_inverse!=-1 & ERFindy$N>=800)
+ERFindy$Chromosome<-"Y"
+peaky<-peaksnew(ERFindy,sd3,500,1000)
+peaky$Chromosome<-"Y"
+peak<-rbind(peak,peaky)
+pairy<-pairPeak(peaky,ERGeney,25000,-10000)
+pair<-rbind(pair,pairy)
+
+#remove data from pair function that lists peaks down stream of gene end
+pair_up<-subset(pair,pair$Proxy!="Down")
+
+#calculate overall genome-wide peak and gene counts from random sampling
+tot_peak<-subset(randframe,randframe$Chromosome=="X")$Peak_Num+subset(randframe,randframe$Chromosome=="1")$Peak_Num+subset(randframe,randframe$Chromosome=="2")$Peak_Num+subset(randframe,randframe$Chromosome=="3")$Peak_Num+subset(randframe,randframe$Chromosome=="4")$Peak_Num+subset(randframe,randframe$Chromosome=="5")$Peak_Num+subset(randframe,randframe$Chromosome=="6")$Peak_Num+subset(randframe,randframe$Chromosome=="7")$Peak_Num+subset(randframe,randframe$Chromosome=="8")$Peak_Num+subset(randframe,randframe$Chromosome=="9")$Peak_Num+subset(randframe,randframe$Chromosome=="10")$Peak_Num+subset(randframe,randframe$Chromosome=="11")$Peak_Num+subset(randframe,randframe$Chromosome=="12")$Peak_Num+subset(randframe,randframe$Chromosome=="13")$Peak_Num+subset(randframe,randframe$Chromosome=="14")$Peak_Num+subset(randframe,randframe$Chromosome=="15")$Peak_Num+subset(randframe,randframe$Chromosome=="16")$Peak_Num+subset(randframe,randframe$Chromosome=="17")$Peak_Num+subset(randframe,randframe$Chromosome=="18")$Peak_Num+subset(randframe,randframe$Chromosome=="19")$Peak_Num+subset(randframe,randframe$Chromosome=="20")$Peak_Num+subset(randframe,randframe$Chromosome=="21")$Peak_Num+subset(randframe,randframe$Chromosome=="22")$Peak_Num
+
+tot_Gene<-subset(randframe,randframe$Chromosome=="X")$Gene_Num+subset(randframe,randframe$Chromosome=="1")$Gene_Num+subset(randframe,randframe$Chromosome=="2")$Gene_Num+subset(randframe,randframe$Chromosome=="3")$Gene_Num+subset(randframe,randframe$Chromosome=="4")$Gene_Num+subset(randframe,randframe$Chromosome=="5")$Gene_Num+subset(randframe,randframe$Chromosome=="6")$Gene_Num+subset(randframe,randframe$Chromosome=="7")$Gene_Num+subset(randframe,randframe$Chromosome=="8")$Gene_Num+subset(randframe,randframe$Chromosome=="9")$Gene_Num+subset(randframe,randframe$Chromosome=="10")$Gene_Num+subset(randframe,randframe$Chromosome=="11")$Gene_Num+subset(randframe,randframe$Chromosome=="12")$Gene_Num+subset(randframe,randframe$Chromosome=="13")$Gene_Num+subset(randframe,randframe$Chromosome=="14")$Gene_Num+subset(randframe,randframe$Chromosome=="15")$Gene_Num+subset(randframe,randframe$Chromosome=="16")$Gene_Num+subset(randframe,randframe$Chromosome=="17")$Gene_Num+subset(randframe,randframe$Chromosome=="18")$Gene_Num+subset(randframe,randframe$Chromosome=="19")$Gene_Num+subset(randframe,randframe$Chromosome=="20")$Gene_Num+subset(randframe,randframe$Chromosome=="21")$Gene_Num+subset(randframe,randframe$Chromosome=="22")$Gene_Num
+
+#sample of significance test
+length(levels(droplevels(subset(pair_up,pair_up$Chromosome=="15")$Gene)))
+#[1] 2
+length(subset(pair_up,pair_up$Chromosome=="15")$Gene)
+#[1] 3
+sum(subset(randframe,randframe$Chromosome=="15")$Gene_Num>=2)/1000
+#[1] 0.194
+sum(subset(randframe,randframe$Chromosome=="15")$Peak_Num>=3)/1000
+#[1] 0.088
+
+#values from Table 1 are generated by setting window length equal to bp length of Chromosome with Ns masked and alpha values
+#g_bp_cor is calculated from number of estrogen genes divided by bp multiplied by bp of Chromosome Y (Table 1 has values)
+#mean_Kd is from Table 1
+
+summary(lm(log(1+g_bp_cor[c(1:24)])~log(1+mean_Kd[c(1:24)])))
+#
+#Call:
+#lm(formula = log(1 + g_bp_cor[c(1:24)]) ~ log(1 + mean_Kd[c(1:24)]))
+#
+#Residuals:
+#     Min       1Q   Median       3Q      Max 
+#-0.90095 -0.07147  0.06029  0.15909  0.63299 
+#
+#Coefficients:
+#                          Estimate Std. Error t value Pr(>|t|)  
+#(Intercept)                -18.049      8.072  -2.236   0.0358 *
+#log(1 + mean_Kd[c(1:24)]) 7225.383   3067.320   2.356   0.0278 *
+#---
+#Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+#
+#Residual standard error: 0.3876 on 22 degrees of freedom
+#Multiple R-squared:  0.2014,	Adjusted R-squared:  0.1651 
+#F-statistic: 5.549 on 1 and 22 DF,  p-value: 0.02782
+
+summary(lm(log(1+g_bp_cor[c(1:21,23)])~log(1+mean_Kd[c(1:21,23)])))
+#
+#Call:
+#lm(formula = log(1 + g_bp_cor[c(1:21, 23)]) ~ log(1 + mean_Kd[c(1:21, 
+#    23)]))
+#
+#Residuals:
+#     Min       1Q   Median       3Q      Max 
+#-0.48028 -0.11563  0.02425  0.10094  0.56244 
+#
+#Coefficients:
+#                               Estimate Std. Error t value Pr(>|t|)    
+#(Intercept)                     -25.986      6.414  -4.051 0.000624 ***
+#log(1 + mean_Kd[c(1:21, 23)]) 10273.653   2439.409   4.212 0.000429 ***
+#---
+#Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+#
+#Residual standard error: 0.2782 on 20 degrees of freedom
+#Multiple R-squared:   0.47,	Adjusted R-squared:  0.4435 
+#F-statistic: 17.74 on 1 and 20 DF,  p-value: 0.000429
+
+
+#load fonts
+library("extrafont")
+font_import()
+loadfonts()
+
+#Plot Figure 2
+postscript("~chromKdplot.eps")
+par(family="Arial",mar=c(5,6,2,2))
+plot(log(1+g_bp_cor[c(1:24)])~log(1+mean_Kd[c(1:24)]),xlab=expression(paste("Mean Kd"^"-1")),ylab="Estrogen Responsive Genes per\nLength of Y Chromosome",col="white",cex.lab=1.5,cex.axis=1.5)
+text(x=log(1+mean_Kd[c(1:24)]),y=log(1+g_bp_cor[c(1:24)]),labels=c(1:22,"X","Y"),cex=1.5)
+abline(a=-18.049,b=7225.383,untf = TRUE,lw=2)
+abline(a=-25.986,b=10273.653,untf = TRUE,lw=2,lty=2)
+dev.off()
+
+
+#Plot Figure 1
+gene <- read.delim("~gff.gff", header=F, comment.char="#")
+gene<-gene[c(grep("NC_",gene[,1])),]
+gene<-subset(gene,gene[,3]=="gene")
+gene<-subset(gene,gene[,1]!="NC_012920.1")
+Chr<-droplevels(gene[,1])
+gene<-data.frame(Chr,gene[,3],gene[,4],gene[,5],gene[,7],gene[,9])
+gene<-data.frame(gene[,1],gene[,3:6])
+colnames(gene)<-c("Chromosome","Start","Stop","GeneDirection","Info")
+levels(gene[,1])<-c(1:length(levels(gene[,1])))
+gene$Chromosome <- sapply(gene$Chromosome, function(y) { if (y == "23") "X" else y })
+gene$Chromosome <- sapply(gene$Chromosome, function(y) { if (y == "24") "Y" else y })
+gene$Chromosome<-as.factor(gene$Chromosome)
+name<-vector(mode="character")
+for(i in 1:length(gene$Info))
+{
+    rowi<-gene$Info[i]
+    namei<-substr(rowi,regexpr("gene=",rowi)[1]+5,regexpr(";gene_",rowi)[1]-1)
+    name<-append(name,namei)
+}
+hs_gene<-data.frame("Homo_sapiens",name,gene)
+colnames(hs_gene)<-c("Species","Name","Chromosome","Start","Stop","GeneDirection","Info")
+estroresponse <- read.csv("~estroresponse.csv")
+estroresponse$estroresponse<-factor(estroresponse$estroresponse)
+ERGene<-hs_gene[which(hs_gene$Name %in% estroresponse$estroresponse),]
+ERGene12<-chr12[which(chr12$Name %in% estroresponse$estroresponse),]
+sd3<-0.003019037
+ERFind12 <- read.csv("~EREout/chr12.csv",skip = 1)
+ERFind12<-subset(ERFind12,ERFind12$mean_Kd_inverse!=-1 & ERFind12$N>=800)
+postscript("~chrom12plot.eps")
+par(family="Arial",mar=c(5,5,2,2))
+plot(ERFind12$mean_Kd_inverse~ERFind12$genome_position,xlim=c(ERFind12$genome_position[1]+8750000,ERFind12$genome_position[length(ERFind12$genome_position)])-4500000,ylim=c(min(ERFind12$mean_Kd_inverse),max(ERFind12$mean_Kd_inverse)),pch=20,cex=0.95,cex.lab=1.35,cex.axis=1.35,xlab="Base Pair Number",ylab=expression(paste("Predicted ER Alpha Affinity"^"-1")),col="gray62")
+for(i in 1:length(ERGene12[,1]))
+	{
+	 rowi<-ERGene12[i,]
+	 segments(x0=rowi$Start,y0=0.007,y1=0,lw=1.25)
+	 }
+sd3set<-subset(ERFind12, ERFind12$mean_Kd_inverse>=sd3)
+points(x=sd3set$genome_position,y=sd3set$mean_Kd_inverse,pch=20,cex=1.0)
+sd5<-0.00327925
+abline(h=sd5,lty=2,lw=1.5)
+dev.off()
