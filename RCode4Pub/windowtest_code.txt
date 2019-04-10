@@ -1,0 +1,26 @@
+#read in csv output files then subset to specific range
+#all files represent EREFinder output of a scan of x window size with x/2 increments of human chr17
+#note the bp15 was created by using the "scan" function in R then saving back to csv--See hominid code
+kb1<-read.csv("~1kb.csv")
+kb10<-read.csv("~10kb.csv")
+bp100<-read.csv("~100bp.csv")
+bp15<-read.csv("~15bp.csv")
+kb10<-kb10[which(kb10$genome_position>=42800000 & kb10$genome_position<=42900000),]
+kb1<-kb1[which(kb1$genome_position>=42800000 & kb1$genome_position<=42900000),]
+bp100<-bp100[which(bp100$genome_position>=42800000 & bp100$genome_position<=42900000),]
+bp15<-bp15[which(bp15$genome_position>=42800000 & bp15$genome_position<=42900000),]
+
+#plot code
+library("extrafont")
+loadfonts()
+postscript("~windoweffect.eps",family="Arial")
+par(mfrow=c(2,2),mar=c(4,2,1,1))
+plot(bp15$mean_Kd_inverse~bp15$genome_position,pch=16,xlab="1bp Window",ylab="",cex.lab=1.75,cex.axis=1.25)
+abline(v=42862732,lty=3,lwd=2)
+plot(bp100$mean_Kd_inverse~bp100$genome_position,pch=16,xlab="100bp Window",ylab="",cex.lab=1.75,cex.axis=1.25)
+abline(v=42862732,lty=3,lwd=2)
+plot(kb1$mean_Kd_inverse~kb1$genome_position,pch=16,xlab="1kb Window",ylab="",cex.lab=1.75,cex.axis=1.25)
+abline(v=42862732,lty=3,lwd=2)
+plot(kb10$mean_Kd_inverse~kb10$genome_position,pch=16,xlab="10kb Window",ylab="",cex.lab=1.75,cex.axis=1.25)
+abline(v=42862732,lty=3,lwd=2)
+dev.off()

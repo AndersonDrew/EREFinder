@@ -1,0 +1,124 @@
+#read in human gff and pull genes
+gene <- read.delim("~hs_gff.gff", header=F, comment.char="#")
+gene<-gene[c(grep("NC_",gene[,1])),]
+gene<-subset(gene,gene[,3]=="gene")
+gene<-subset(gene,gene[,1]!="NC_012920.1")
+Chr<-droplevels(gene[,1])
+gene<-data.frame(Chr,gene[,3],gene[,4],gene[,5],gene[,7],gene[,9])
+gene<-data.frame(gene[,1],gene[,3:6])
+colnames(gene)<-c("Chromosome","Start","Stop","GeneDirection","Info")
+levels(gene[,1])<-c(1:length(levels(gene[,1])))
+gene$Chromosome <- sapply(gene$Chromosome, function(y) { if (y == "23") "X" else y })
+gene$Chromosome <- sapply(gene$Chromosome, function(y) { if (y == "24") "Y" else y })
+gene$Chromosome<-as.factor(gene$Chromosome)
+name<-vector(mode="character")
+for(i in 1:length(gene$Info))
+ {
+     rowi<-gene$Info[i]
+     namei<-substr(rowi,regexpr("gene=",rowi)[1]+5,regexpr(";gene_",rowi)[1]-1)
+     name<-append(name,namei)
+ }
+hs_gene<-data.frame("Homo_sapiens",name,gene)
+colnames(hs_gene)<-c("Species","Name","Chromosome","Start","Stop","GeneDirection","Info")
+rm(gene) 
+
+#read in estrogen genes from Bourdeau 2004 (er1) and Lin 2007 (er2)
+er1 <- read.csv("~estroresponse.csv")
+er2 <- read.csv("~newestro.csv")
+er1$estroresponse<-as.factor(er1$estroresponse)
+er2$estroresponse<-as.factor(er2$estroresponse)
+er_all<-rbind(er1,er2)
+
+#subset ER genes from human gff
+ERGene1<-hs_gene[which(hs_gene$Name %in% er1$estroresponse),]
+ERGene2<-hs_gene[which(hs_gene$Name %in% er2$estroresponse),]
+ERGene_all<-hs_gene[which(hs_gene$Name %in% er_all$estroresponse),]
+
+#pull meankd, number of er genes, and size for each chromosome then adjust er gene density
+table(ERGene_all$Chromosome)
+
+ 1 10 11 12 13 14 15 16 17 18 19  2 20 21 22  3  4  5 
+31 16 21 25  6 18 10 13 25  6 14 21 23  6  2 21 12 24 
+ 6  7  8  9  X  Y 
+16 13 13 14  6  0 
+ercount<-c(31,21,21,12,24,16,13,13,14,16,21,25,6,18,10,13,25,6,14,23,6,2,6,0)
+chrsize<-c(230479129,240547904,198099854,189752429,181264874,170078330,158969911,144767982,121789965,133262424,134533518,133137461,97982862,90567813,84641083,81805664,82919726,80088941,58440646,63943040,40087953,39159180,154892642,26414278)
+meankd<-c(0.00264078,0.00262041,0.00261702,0.00259616,0.00261671,0.00261456,0.00262683,0.0026219,0.00263029,0.00263678,0.00263749,0.00263013,0.0025993,0.0026263,0.00264391,0.00267042,0.00267419,0.00261764,0.00270217,0.00265866,0.00262256,0.00268787,0.00261742,0.0026262)
+erdens<-ercount/chrsize * chrsize[24]
+
+#correlate ER gene density with overall affinity of chromosome we get
+summary(lm(log(erdens+1)~log(1+meankd)))
+#
+#Call:
+#lm(formula = log(erdens + 1) ~ log(1 + meankd))
+#
+#Residuals:
+#     Min       1Q   Median       3Q      Max 
+#-1.30231 -0.07345  0.03546  0.24647  0.76999 
+#
+#Coefficients:
+#                Estimate Std. Error t value Pr(>|t|)  
+#(Intercept)       -21.32       9.49  -2.246   0.0351 *
+#log(1 + meankd)  8623.47    3606.26   2.391   0.0258 *
+#---
+#Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+#
+#Residual standard error: 0.4557 on 22 degrees of freedom
+#Multiple R-squared:  0.2063,	Adjusted R-squared:  0.1702 
+#F-statistic: 5.718 on 1 and 22 DF,  p-value: 0.02578
+
+#same correlation but drop Y chromosome (0 ER genes)
+summary(lm(log(erdens[c(1:23)]+1)~log(1+meankd[c(1:23)])))
+#
+#Call:
+#lm(formula = log(erdens[c(1:23)] + 1) ~ log(1 + meankd[c(1:23)]))
+#
+#Residuals:
+#     Min       1Q   Median       3Q      Max 
+#-0.99668 -0.13559 -0.02051  0.19602  0.73058 
+#
+#Coefficients:
+#                         Estimate Std. Error t value Pr(>|t|)  
+#(Intercept)                -19.32       7.61  -2.539   0.0191 *
+#log(1 + meankd[c(1:23)])  7888.21    2891.63   2.728   0.0126 *
+#---
+#Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+#
+#Residual standard error: 0.3645 on 21 degrees of freedom
+#Multiple R-squared:  0.2616,	Adjusted R-squared:  0.2265 
+#F-statistic: 7.442 on 1 and 21 DF,  p-value: 0.0126
+
+#Chr22 is really small and looks like an outlier, dropped it to see results
+> summary(lm(log(erdens[c(1:21,23)]+1)~log(1+meankd[c(1:21,23)])))
+#
+#Call:
+#lm(formula = log(erdens[c(1:21, 23)] + 1) ~ log(1 + meankd[c(1:21, 
+#    23)]))
+#
+#Residuals:
+#     Min       1Q   Median       3Q      Max 
+#-0.57250 -0.16496 -0.04086  0.20190  0.57672 
+#
+#Coefficients:
+#                              Estimate Std. Error t value Pr(>|t|)    
+#(Intercept)                    -30.345      6.359  -4.772 0.000116 ***
+#log(1 + meankd[c(1:21, 23)]) 12097.237   2418.469   5.002 6.84e-05 ***
+#---
+#Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+#
+#Residual standard error: 0.2758 on 20 degrees of freedom
+#Multiple R-squared:  0.5558,	Adjusted R-squared:  0.5335 
+#F-statistic: 25.02 on 1 and 20 DF,  p-value: 6.841e-05
+
+#load fonts
+library("extrafont")
+loadfonts()
+
+#Plot Figure 2
+postscript("~chromKdplot.eps",family="Arial")
+par(mar=c(5,6,2,2))
+plot(log(1+erdens[c(1:24)])~log(1+meankd[c(1:24)]),xlab=expression(paste("Mean Kd"^"-1")),ylab="Estrogen Responsive Genes per\nLength of Y Chromosome",col="white",cex.lab=1.5,cex.axis=1.5)
+text(x=log(1+meankd[c(1:24)]),y=log(1+erdens[c(1:24)]),labels=c(1:22,"X","Y"),cex=1.5)
+abline(a=-21.32,b=8623.47,untf = TRUE,lw=2)
+abline(a=-30.345,b=12097.237,untf = TRUE,lw=2,lty=2)
+dev.off()
