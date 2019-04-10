@@ -1,0 +1,3 @@
+>NC_000017.11 Homo sapiens chromosome 17, GRCh38.p7 Primary Assembly
+genome_position,N,mean_Kd_inverse,N_over_1.5,N_0.15_to_1.5,N_0.09_to_0.15,N_0.04_to_0.09,Total_over_0.04
+500000000,82919726,0.00267419,7,5583,21064,76658,103312
