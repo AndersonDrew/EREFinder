@@ -1,7 +1,7 @@
 # EREfinder
 
 by Adam G. Jones (adamjones@uidaho.edu) and
-Andrew Anderson (aanderson@bio.tamu.edu)
+Andrew Anderson (andersond@reed.edu)
 
 University of Idaho and Texas A&M University
 
